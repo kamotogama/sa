@@ -1,7 +1,9 @@
 const fs = require('fs');
 const axios = require('axios');
 const cheerio = require('cheerio');
-
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
 const NEWS_FILE = '../news.json';
 
 const newsSources = {
@@ -49,6 +51,22 @@ async function updateNews() {
   console.log('News updated successfully');
 }
 
+app.get('/news', (req, res) => {
+  fs.readFile(NEWS_FILE, 'utf8', (err, data) => {
+    if (err) {
+      res.status(500).json({ error: 'Unable to read news file' });
+    } else {
+      res.json(JSON.parse(data));
+    }
+  });
+});
+
+app.listen(port, () => {
+  console.log(`News parser listening at http://localhost:${port}`);
+});
+
 // Запускаем парсер сразу и затем каждые 5 минут
 updateNews();
 setInterval(updateNews, 5 * 60 * 1000);
+
+
