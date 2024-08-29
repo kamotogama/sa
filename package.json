@@ -1,0 +1,14 @@
+{
+  "name": "news-parser",
+  "version": "1.0.0",
+  "description": "News parser for weather widget",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "cheerio": "^1.0.0-rc.10",
+    "dotenv": "^10.0.0"
+  }
+}
