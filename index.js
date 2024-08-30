@@ -11,54 +11,34 @@ app.use(express.json());
 
 const newsSources = {
   en: [
-    { url: 'https://www.bbc.com/news', selector: '.gs-c-promo-heading' },
-    { url: 'https://www.theguardian.com/international', selector: '.fc-item__title' },
-    { url: 'https://www.nytimes.com/', selector: '.story-wrapper' }
+    { url: 'https://www.bbc.com/news', selector: '.gs-c-promo-heading' }
   ],
   ru: [
-    { url: 'https://lenta.ru/', selector: '.card-mini__title' },
-    { url: 'https://www.rbc.ru/', selector: '.news-feed__item' },
-    { url: 'https://ria.ru/', selector: '.cell-list__item-title' }
+    { url: 'https://lenta.ru/', selector: '.card-mini__title' }
   ],
   es: [
-    { url: 'https://elpais.com/', selector: '.headline' },
-    { url: 'https://www.elmundo.es/', selector: '.ue-c-cover-content__headline' },
-    { url: 'https://www.abc.es/', selector: '.titular' }
+    { url: 'https://elpais.com/', selector: '.headline' }
   ],
   de: [
-    { url: 'https://www.spiegel.de/', selector: '.c-teaser__title' },
-    { url: 'https://www.faz.net/aktuell/', selector: '.tsr-Base_ContentWrap' },
-    { url: 'https://www.sueddeutsche.de/', selector: '.sz-teaser__title' }
+    { url: 'https://www.spiegel.de/', selector: '.c-teaser__title' }
   ],
   fr: [
-    { url: 'https://www.lemonde.fr/', selector: '.article__title' },
-    { url: 'https://www.lefigaro.fr/', selector: '.fig-profile__headline' },
-    { url: 'https://www.liberation.fr/', selector: '.teaser-title' }
+    { url: 'https://www.lemonde.fr/', selector: '.article__title' }
   ],
   it: [
-    { url: 'https://www.repubblica.it/', selector: '.entry-title' },
-    { url: 'https://www.corriere.it/', selector: '.title-news' },
-    { url: 'https://www.lastampa.it/', selector: '.entry-title' }
+    { url: 'https://www.repubblica.it/', selector: '.entry-title' }
   ],
   ja: [
-    { url: 'https://www3.nhk.or.jp/news/', selector: '.content--title' },
-    { url: 'https://mainichi.jp/', selector: '.headline' },
-    { url: 'https://www.asahi.com/', selector: '.c-list-title' }
+    { url: 'https://www3.nhk.or.jp/news/', selector: '.content--title' }
   ],
   zh: [
-    { url: 'https://news.sina.com.cn/', selector: '.news-item-title' },
-    { url: 'https://www.163.com/', selector: '.news_title' },
-    { url: 'https://www.qq.com/', selector: '.text' }
+    { url: 'https://news.sina.com.cn/', selector: '.news-item-title' }
   ],
   nl: [
-    { url: 'https://nos.nl/', selector: '.list-item__content-title' },
-    { url: 'https://www.nu.nl/', selector: '.articleheader__title' },
-    { url: 'https://www.telegraaf.nl/', selector: '.ArticleTitle' }
+    { url: 'https://nos.nl/', selector: '.list-item__content-title' }
   ],
   sv: [
-    { url: 'https://www.svt.se/nyheter/', selector: '.nyh_teaser__heading' },
-    { url: 'https://www.dn.se/', selector: '.teaser__title' },
-    { url: 'https://www.aftonbladet.se/', selector: '.abh1' }
+    { url: 'https://www.svt.se/nyheter/', selector: '.nyh_teaser__heading' }
   ]
 };
 const loadingMessages = {
