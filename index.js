@@ -2,11 +2,9 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
-const NodeCache = require('node-cache');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const cache = new NodeCache({ stdTTL: 1800 }); // 30 минут
 
 app.use(cors());
 app.use(express.json());
@@ -63,99 +61,99 @@ const newsSources = {
     { url: 'https://www.aftonbladet.se/', selector: '.abh1' }
   ]
 };
+const loadingMessages = {
+  en: 'Loading...',
+  ru: 'Загрузка...',
+  es: 'Cargando...',
+  de: 'Laden...',
+  fr: 'Chargement...',
+  it: 'Caricamento...',
+  ja: '読み込み中...',
+  zh: '加载中...',
+  nl: 'Laden...',
+  sv: 'Laddar...'
+};
 
-async function fetchNewsWithRetry(source, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await axios.get(source.url, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-      const $ = cheerio.load(response.data);
-      const news = [];
+let cachedNews = {};
+let isUpdating = false;
 
-      $(source.selector).each((i, element) => {
+async function fetchNews(source) {
+  try {
+    const response = await axios.get(source.url, {
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    const $ = cheerio.load(response.data);
+    const news = [];
+
+    $(source.selector).each((i, element) => {
+      if (news.length < 5) {
         const title = $(element).text().trim();
         const link = $(element).attr('href') || $(element).find('a').attr('href');
-        if (title && link && news.length < 5) {
+        if (title && link) {
           news.push({ 
             title, 
             link: link.startsWith('http') ? link : new URL(link, source.url).href,
             source: new URL(source.url).hostname
           });
         }
-      });
+      }
+    });
 
-      console.log(`Found ${news.length} news items from ${source.url}`);
-      return news.slice(0, 5);
-    } catch (error) {
-      console.error(`Attempt ${i + 1} failed for ${source.url}: ${error.message}`);
-      if (i === maxRetries - 1) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
-    }
+    return news;
+  } catch (error) {
+    console.error(`Error fetching news from ${source.url}:`, error.message);
+    return [];
   }
 }
 
-async function updateAllNews() {
-  const allNews = {};
+async function updateNews() {
+  if (isUpdating) return;
+  isUpdating = true;
 
-  for (const [lang, sources] of Object.entries(newsSources)) {
-    allNews[lang] = [];
-    for (const source of sources) {
-      try {
-        const newsFromSource = await fetchNewsWithRetry(source);
-        allNews[lang] = allNews[lang].concat(newsFromSource);
-      } catch (error) {
-        console.error(`Failed to fetch news from ${source.url} after multiple attempts`);
+  for (let sourceIndex = 0; sourceIndex < 3; sourceIndex++) {
+    for (const [lang, sources] of Object.entries(newsSources)) {
+      if (sourceIndex < sources.length) {
+        const source = sources[sourceIndex];
+        const newsFromSource = await fetchNews(source);
+        if (!cachedNews[lang]) {
+          cachedNews[lang] = [];
+        }
+        cachedNews[lang] = [...cachedNews[lang], ...newsFromSource].slice(0, 15);
       }
     }
-    allNews[lang] = allNews[lang].slice(0, 15); // Ограничиваем до 15 новостей на язык
   }
 
-  return allNews;
+  isUpdating = false;
+  setTimeout(updateNews, 30 * 60 * 1000); // Обновление каждые 30 минут
 }
 
-async function getNews() {
-  let news = cache.get('news');
-  if (!news) {
-    console.log('Updating news cache...');
-    news = await updateAllNews();
-    cache.set('news', news);
-    console.log('News cache updated');
-  }
-  return news;
-}
+// Запускаем первое обновление новостей
+updateNews();
 
-// Обновление новостей каждые 30 минут
-setInterval(async () => {
-  console.log('Scheduled news update...');
-  const news = await updateAllNews();
-  cache.set('news', news);
-  console.log('Scheduled news update completed');
-}, 30 * 60 * 1000);
-
-app.get('/news', async (req, res) => {
-  const news = await getNews();
-  res.json(news);
+app.get('/news', (req, res) => {
+  res.json(cachedNews);
 });
 
-app.get('/', async (req, res) => {
-  const news = await getNews();
-  
+app.get('/', (req, res) => {
   let newsHtml = '';
-  for (const [lang, items] of Object.entries(news)) {
+  for (const [lang, items] of Object.entries(newsSources)) {
+    const news = cachedNews[lang] || [];
     newsHtml += `
-      <div class="language-section">
+      <div class="language-section" id="${lang}-news">
         <h2>${lang.toUpperCase()}</h2>
         <ul>
-          ${items.map(item => `
-            <li>
-              <a href="${item.link}" target="_blank">${item.title}</a>
-              <span class="source">(${item.source})</span>
-            </li>
-          `).join('')}
+          ${news.length > 0 ? 
+            news.map(item => `
+              <li>
+                <a href="${item.link}" target="_blank">${item.title}</a>
+                <span class="source">(${item.source})</span>
+              </li>
+            `).join('') : 
+            `<li>${loadingMessages[lang] || 'Loading...'}</li>`
+          }
         </ul>
       </div>
     `;
@@ -203,31 +201,16 @@ app.get('/', async (req, res) => {
             padding: 10px;
             background-color: #ecf0f1;
             border-radius: 3px;
-            transition: background-color 0.3s ease;
-          }
-          li:hover {
-            background-color: #e0e6e8;
           }
           a {
             color: #2980b9;
             text-decoration: none;
             font-weight: bold;
           }
-          a:hover {
-            text-decoration: underline;
-          }
           .source {
             color: #7f8c8d;
             font-size: 0.8em;
             margin-left: 5px;
-          }
-          @media (max-width: 600px) {
-            body {
-              padding: 10px;
-            }
-            .language-section {
-              padding: 10px;
-            }
           }
         </style>
       </head>
@@ -236,11 +219,32 @@ app.get('/', async (req, res) => {
         <div id="news-content">
           ${newsHtml}
         </div>
+        <script>
+          function updateNewsDisplay() {
+            fetch('/news')
+              .then(response => response.json())
+              .then(data => {
+                for (const [lang, news] of Object.entries(data)) {
+                  const newsSection = document.getElementById(lang + '-news');
+                  if (newsSection) {
+                    const newsList = newsSection.querySelector('ul');
+                    newsList.innerHTML = news.map(item => `
+                      <li>
+                        <a href="${item.link}" target="_blank">${item.title}</a>
+                        <span class="source">(${item.source})</span>
+                      </li>
+                    `).join('');
+                  }
+                }
+              });
+          }
+          
+          // Обновляем отображение новостей каждые 10 секунд
+          setInterval(updateNewsDisplay, 10000);
+        </script>
       </body>
     </html>
   `);
 });
 
-app.listen(port, () => {
-  console.log(`News parser listening at http://localhost:${port}`);
-});
+module.exports = app;
