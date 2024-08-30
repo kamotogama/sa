@@ -1,16 +1,15 @@
 {
-  "name": "news-parser",
+  "name": "news-aggregator",
   "version": "1.0.0",
+  "description": "Global News Aggregator",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-
   "dependencies": {
     "express": "^4.17.1",
     "axios": "^0.21.1",
     "cheerio": "^1.0.0-rc.10",
-    "cors": "^2.8.5",
-    "node-cache": "^5.1.2"
+    "cors": "^2.8.5"
   }
 }
