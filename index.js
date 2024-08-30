@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cors = require('cors');
+const NodeCache = require('node-cache');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -9,58 +10,62 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Initialize cache with 30 minutes TTL
+const cache = new NodeCache({ stdTTL: 1800 });
+
 const newsSources = {
   en: [
-    { url: 'https://www.bbc.com/news', selector: '.gs-c-promo-heading' }
+    { url: 'https://www.bbc.com/news', selector: '.gs-c-promo-heading' },
+    { url: 'https://www.theguardian.com/international', selector: '.fc-item__title' }
   ],
   ru: [
-    { url: 'https://lenta.ru/', selector: '.card-mini__title' }
+    { url: 'https://lenta.ru/', selector: '.card-mini__title' },
+    { url: 'https://ria.ru/', selector: '.cell-list__item-title' }
   ],
   es: [
-    { url: 'https://elpais.com/', selector: '.headline' }
+    { url: 'https://elpais.com/', selector: '.headline' },
+    { url: 'https://www.elmundo.es/', selector: '.ue-c-cover-content__headline' }
   ],
   de: [
-    { url: 'https://www.spiegel.de/', selector: '.c-teaser__title' }
+    { url: 'https://www.spiegel.de/', selector: '.c-teaser__title' },
+    { url: 'https://www.faz.net/aktuell/', selector: '.tsr-Base_HeadlineText' }
   ],
   fr: [
-    { url: 'https://www.lemonde.fr/', selector: '.article__title' }
+    { url: 'https://www.lemonde.fr/', selector: '.article__title' },
+    { url: 'https://www.lefigaro.fr/', selector: '.fig-profile__headline' }
   ],
   it: [
-    { url: 'https://www.repubblica.it/', selector: '.entry-title' }
+    { url: 'https://www.repubblica.it/', selector: '.entry-title' },
+    { url: 'https://www.corriere.it/', selector: '.news-title' }
   ],
   ja: [
-    { url: 'https://www3.nhk.or.jp/news/', selector: '.content--title' }
+    { url: 'https://www3.nhk.or.jp/news/', selector: '.content--title' },
+    { url: 'https://mainichi.jp/', selector: '.headline' }
   ],
   zh: [
-    { url: 'https://news.sina.com.cn/', selector: '.news-item-title' }
+    { url: 'https://news.sina.com.cn/', selector: '.news-item-title' },
+    { url: 'https://www.zaobao.com/', selector: '.card-title' }
   ],
   nl: [
-    { url: 'https://nos.nl/', selector: '.list-item__content-title' }
+    { url: 'https://nos.nl/', selector: '.list-item__content-title' },
+    { url: 'https://www.nu.nl/', selector: '.headline' }
   ],
   sv: [
-    { url: 'https://www.svt.se/nyheter/', selector: '.nyh_teaser__heading' }
+    { url: 'https://www.svt.se/nyheter/', selector: '.nyh_teaser__heading' },
+    { url: 'https://www.dn.se/', selector: '.teaser__title' }
   ]
 };
-const loadingMessages = {
-  en: 'Loading...',
-  ru: 'Загрузка...',
-  es: 'Cargando...',
-  de: 'Laden...',
-  fr: 'Chargement...',
-  it: 'Caricamento...',
-  ja: '読み込み中...',
-  zh: '加载中...',
-  nl: 'Laden...',
-  sv: 'Laddar...'
-};
 
-let cachedNews = {};
-let isUpdating = false;
+const loadingMessages = {
+  en: 'Loading...', ru: 'Загрузка...', es: 'Cargando...', de: 'Laden...',
+  fr: 'Chargement...', it: 'Caricamento...', ja: '読み込み中...',
+  zh: '加载中...', nl: 'Laden...', sv: 'Laddar...'
+};
 
 async function fetchNews(source) {
   try {
     const response = await axios.get(source.url, {
-      timeout: 5000,
+      timeout: 10000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -90,36 +95,39 @@ async function fetchNews(source) {
 }
 
 async function updateNews() {
-  if (isUpdating) return;
-  isUpdating = true;
+  console.log('Updating news...');
+  const newsCacheKey = 'newsCache';
+  let cachedNews = cache.get(newsCacheKey) || {};
 
-  for (let sourceIndex = 0; sourceIndex < 3; sourceIndex++) {
-    for (const [lang, sources] of Object.entries(newsSources)) {
-      if (sourceIndex < sources.length) {
-        const source = sources[sourceIndex];
-        const newsFromSource = await fetchNews(source);
-        if (!cachedNews[lang]) {
-          cachedNews[lang] = [];
-        }
-        cachedNews[lang] = [...cachedNews[lang], ...newsFromSource].slice(0, 15);
-      }
+  for (const [lang, sources] of Object.entries(newsSources)) {
+    cachedNews[lang] = [];
+    for (const source of sources) {
+      const newsFromSource = await fetchNews(source);
+      cachedNews[lang] = [...cachedNews[lang], ...newsFromSource];
     }
+    cachedNews[lang] = cachedNews[lang].slice(0, 15);
   }
 
-  isUpdating = false;
-  setTimeout(updateNews, 30 * 60 * 1000); // Обновление каждые 30 минут
+  cache.set(newsCacheKey, cachedNews);
+  console.log('News updated successfully');
 }
 
-// Запускаем первое обновление новостей
+// Initial news update
 updateNews();
 
+// Schedule news update every 30 minutes
+setInterval(updateNews, 30 * 60 * 1000);
+
 app.get('/news', (req, res) => {
+  const cachedNews = cache.get('newsCache') || {};
   res.json(cachedNews);
 });
 
 app.get('/', (req, res) => {
+  const cachedNews = cache.get('newsCache') || {};
   let newsHtml = '';
-  for (const [lang, items] of Object.entries(newsSources)) {
+  
+  for (const [lang, sources] of Object.entries(newsSources)) {
     const news = cachedNews[lang] || [];
     newsHtml += `
       <div class="language-section" id="${lang}-news">
@@ -140,9 +148,10 @@ app.get('/', (req, res) => {
   }
 
   res.send(`
-    <html>
+    <!DOCTYPE html>
+    <html lang="en">
       <head>
-        <title>News Parser</title>
+        <title>Global News Aggregator</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
@@ -216,11 +225,12 @@ app.get('/', (req, res) => {
                     `).join('');
                   }
                 }
-              });
+              })
+              .catch(error => console.error('Error updating news:', error));
           }
           
-          // Обновляем отображение новостей каждые 10 секунд
-          setInterval(updateNewsDisplay, 10000);
+          // Update news display every 30 seconds
+          setInterval(updateNewsDisplay, 30000);
         </script>
       </body>
     </html>
